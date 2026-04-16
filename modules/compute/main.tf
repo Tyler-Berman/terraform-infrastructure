@@ -18,6 +18,7 @@ resource "aws_instance" "sentinel_server" {
     instance_type = "t2.micro"
     vpc_security_group_ids = var.vpc_sg_id
     subnet_id = var.subnet_id
+    iam_instance_profile = var.iam_instance_profile
     user_data = <<-EOF
               #!/bin/bash
               yum update -y

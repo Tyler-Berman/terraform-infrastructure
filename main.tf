@@ -20,4 +20,10 @@ module "compute" {
     region = var.region
     subnet_id = module.networking.public_subnet_id
     vpc_sg_id = [module.security.sg_id]
+    iam_instance_profile = module.storage.instance_profile_name
+}
+
+module "storage" {
+    source = "./modules/storage"
+    project_name = var.project_name
 }
