@@ -1,3 +1,13 @@
+resource "tls_private_key" "sentinel_key" {
+    algorithm = "RSA"
+    rsa_bits = 4096
+}
+
+resource "aws_key_pair" "generated_key" {
+    key_name = "${var.project_name}-key"
+    public_key = tls_private_key.sentinel_key.public_key_openssh
+}
+
 data "aws_ami" "latest_amazon_linux" {
     most_recent = true
     owners = ["amazon"]
@@ -19,6 +29,7 @@ resource "aws_instance" "sentinel_server" {
     vpc_security_group_ids = var.vpc_sg_id
     subnet_id = var.subnet_id
     iam_instance_profile = var.iam_instance_profile
+    key_name = aws_key_pair.generated_key.key_name
     user_data = <<-EOF
               #!/bin/bash
               yum update -y
@@ -29,4 +40,10 @@ resource "aws_instance" "sentinel_server" {
     tags = {
         Name = "${var.project_name}-server"
     }
+}
+
+resource "local_file" "private_key" {
+    content = tls_private_key.sentinel_key.private_key_pem
+    filename = "${path.module}/../../${var.project_name}.pem"
+    file_permission = "0400"
 }
