@@ -1,16 +1,15 @@
 
-module "my_vpc_module" {
+module "networking" {
     source = "./modules/vpc"
-    
+    project_name = var.project_name
+    region = var.region
+    vpc_cidr = var.vpc_cidr
 }
 
-module "my_sg_module" {
-    source = "./modules/iam"
-    target_vpc_id = module.my_vpc_module.vpc_id
+module "security" {
+    source = "./modules/security"
+    project_name = var.project_name
+    region = var.region
     ingress_ports = [80,443,22,8080]
-}
-
-module "my_ec2_module" {
-    source = "./modules/compute"
-    vpc_sg_id = [module.my_sg_module.sg_id]
+    vpc_id = module.networking.vpc_id
 }
