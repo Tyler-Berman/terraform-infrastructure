@@ -9,3 +9,7 @@ variable "ec2_lambda"{
 variable "updates_email" {
     type = string
 }
+
+variable "s3_lambda" {
+    type = string
+}

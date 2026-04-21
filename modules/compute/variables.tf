@@ -22,6 +22,13 @@ variable "ec2_lambda" {
     type = string
 }
 
+variable "s3_lambda" {
+  type = string
+}
 variable "topicarn2" {
     type = string
+}
+
+variable "topicarn" {
+  type = string
 }

@@ -23,6 +23,8 @@ module "compute" {
     iam_instance_profile = module.storage.instance_profile_name
     ec2_lambda = var.ec2_lambda
     topicarn2 = module.sns.topicarn2
+    topicarn = module.sns.topicarn
+    s3_lambda = var.s3_lambda
 }
 
 module "storage" {
@@ -34,4 +36,5 @@ module "sns" {
     ec2_lambda = var.ec2_lambda
     region = var.region
     updates_email = var.updates_email
+    s3_lambda = var.s3_lambda
 }

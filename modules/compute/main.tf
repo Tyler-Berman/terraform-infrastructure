@@ -57,10 +57,18 @@ data "archive_file" "ec2_lambda_zip" {
   output_path = "${path.module}/python/EC2_SCRIPT.zip"
 }
 
+data "archive_file" "s3_lambda_zip" {
+  type        = "zip"
+  source_file = "${path.module}/python/S3_SCRIPT.py"
+  output_path = "${path.module}/python/S3_SCRIPT.zip"
+}
+
+
 resource "aws_lambda_function" "ec2_lambda" {
     filename = data.archive_file.ec2_lambda_zip.output_path
     function_name = "EC2_Audit"
     role = aws_iam_role.EC2_Lambda_Role.arn
+    timeout = 30
     handler = "EC2_SCRIPT.lambda_handler"
     runtime = "python3.12"
 
@@ -113,3 +121,59 @@ resource "aws_iam_role" "EC2_Lambda_Role" {
     })
 }
 
+resource "aws_lambda_function" "s3_lambda" {
+    filename = data.archive_file.s3_lambda_zip.output_path
+    function_name = "S3_Audit"
+    role = aws_iam_role.S3_Lambda_Role.arn
+    timeout = 30
+    handler = "S3_SCRIPT.lambda_handler"
+    runtime = "python3.12"
+
+    environment {
+      variables = {
+        APP_REGION = var.region
+        TOPIC_ARN = var.topicarn
+      }
+    }
+}
+
+resource "aws_iam_policy" "S3_Lambda_Policy" {
+    name = "${var.s3_lambda}-policy"
+    policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action   = ["sns:Publish"]
+        Effect   = "Allow"
+        Resource = [var.topicarn] 
+      },
+      {
+        Action   = ["s3:ListAllMyBuckets"]
+        Effect   = "Allow"
+        Resource = "*" 
+      },
+      {
+        Action   = ["s3:GetBucketPublicAccessBlock", "s3:PutBucketPublicAccessBlock"]
+        Effect   = "Allow"
+        Resource = "*" 
+      }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "S3_Lambda_Policy_Attachment" {
+    role       = aws_iam_role.S3_Lambda_Role.name
+    policy_arn = aws_iam_policy.S3_Lambda_Policy.arn
+}
+
+
+resource "aws_iam_role" "S3_Lambda_Role" {
+    name = "${var.s3_lambda}-role"
+    assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = { Service = "lambda.amazonaws.com"}
+    }]
+    })
+}

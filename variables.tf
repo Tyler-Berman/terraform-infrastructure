@@ -22,3 +22,8 @@ variable "updates_email" {
     type = string
     default = "example@example.com"
 }
+
+variable "s3_lambda" {
+    type = string
+    default = "S3_Lambda_Sentinel"
+}
