@@ -17,3 +17,11 @@ variable "subnet_id" {
 variable "iam_instance_profile" {
     type = string
 }
+
+variable "ec2_lambda" {
+    type = string
+}
+
+variable "topicarn2" {
+    type = string
+}
