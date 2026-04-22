@@ -177,3 +177,37 @@ resource "aws_iam_role" "S3_Lambda_Role" {
     }]
     })
 }
+
+resource "aws_cloudwatch_event_rule" "daily_scan" {
+    name = "daily_s3_ec2_scan"
+    description = "Runs S3 and EC2 audit once per day"
+    schedule_expression = "rate(1 day)"
+}
+
+resource "aws_cloudwatch_event_target" "trigger_ec2_audit" {
+    rule = aws_cloudwatch_event_rule.daily_scan.name
+    target_id = "EC2AuditLambda"
+    arn = aws_lambda_function.ec2_lambda.arn
+}
+
+resource "aws_cloudwatch_event_target" "trigger_s3_audit" {
+    rule = aws_cloudwatch_event_rule.daily_scan.name
+    target_id = "S3AuditLambda"
+    arn = aws_lambda_function.s3_lambda.arn
+}
+
+resource "aws_lambda_permission" "allow_cloudwatch_ec2" {
+    statement_id = "AllowCloudwatchForEC2"
+    action = "lambda:InvokeFunction"
+    function_name = aws_lambda_function.ec2_lambda.function_name
+    principal = "events.amazonaws.com"
+    source_arn = aws_cloudwatch_event_rule.daily_scan.arn
+}
+
+resource "aws_lambda_permission" "allow_cloudwatch_s3" {
+    statement_id = "AllowCloudwatchForS3"
+    action = "lambda:InvokeFunction"
+    function_name = aws_lambda_function.s3_lambda.function_name
+    principal = "events.amazonaws.com"
+    source_arn = aws_cloudwatch_event_rule.daily_scan.arn
+}
