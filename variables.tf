@@ -27,3 +27,8 @@ variable "s3_lambda" {
     type = string
     default = "S3_Lambda_Sentinel"
 }
+
+variable "sentinel_lambda" {
+    type = string
+    default = "Master_Sentinel"
+}

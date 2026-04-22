@@ -2,19 +2,25 @@ import boto3
 import json
 import os
 import re
+import gzip
+import io
 
 def lambda_handler(event, context):
-    aws_region = os.environ.get('AWS_REGION', 'us-east-1')
+    aws_region = os.environ.get('APP_REGION', 'us-east-1')
     s3 = boto3.client('s3', region_name=aws_region)
     bedrock = boto3.client('bedrock-runtime', region_name=aws_region)
     sns = boto3.client('sns', region_name=aws_region)
+
     if 'requestContext' in event and 'http' in event['requestContext']:
         try:
             print("DEBUG - Website request detected. Fetching latest analysis...")
-            response = s3.get_object(
-                Bucket=os.environ['RESULTS_BUCKET'], 
-                Key='analysis-attack.txt.json' 
-            )
+            results_bucket = os.environ['REPORTS_BUCKET']
+            objs = s3.list_objects_v2(Bucket=results_bucket, Prefix='analysis-')
+            if 'Contents' not in objs:
+                raise Exception("No analysis files found")
+            latest_key = sorted(objs['Contents'], key=lambda x: x['LastModified'], reverse=True)[0]['Key']
+            
+            response = s3.get_object(Bucket=results_bucket, Key=latest_key)
             latest_analysis = response['Body'].read().decode('utf-8')
             
             return {
@@ -32,23 +38,28 @@ def lambda_handler(event, context):
             return {
                 "statusCode": 404,
                 "headers": {"Access-Control-Allow-Origin": "*"},
-                "body": json.dumps({"threat_level": "N/A", "summary": "No analysis file found yet."})
+                "body": json.dumps({"threat_level": "N/A", "summary": f"Error or no files: {str(e)}"})
             }
-
     try:
         bucket = event['Records'][0]['s3']['bucket']['name']
         key = event['Records'][0]['s3']['object']['key']
         print(f"DEBUG - S3 Trigger detected for file: {key}")
+        response = s3.get_object(Bucket=bucket, Key=key)
+        raw_content = response['Body'].read()
         
-        file_content = s3.get_object(Bucket=bucket, Key=key)['Body'].read().decode('utf-8')
-        
+        if key.endswith('.gz'):
+            with gzip.GzipFile(fileobj=io.BytesIO(raw_content)) as gz:
+                file_content = gz.read().decode('utf-8')
+        else:
+            file_content = raw_content.decode('utf-8')
+        safe_logs = file_content[-10000:]
         prompt = (
-            "You are a security analyst. Analyze these logs for threats. "
-            "Return ONLY a raw JSON object with keys 'threat_level' and 'summary'. "
-            "Do not include any conversational text or markdown. "
-            f"Logs: {file_content}"
+            "You are an expert AWS Security Analyst. Analyze the following logs (CloudTrail or VPC Flow Logs). "
+            "Identify potential threats like unauthorized access, brute force, or suspicious traffic. "
+            "Return ONLY a raw JSON object with keys 'threat_level' (High, Medium, Low) and 'summary'. "
+            "Do not include conversational text. "
+            f"\n\nLogs:\n{safe_logs}"
         )
-        
         bedrock_res = bedrock.invoke_model(
             modelId="amazon.nova-micro-v1:0",
             body=json.dumps({
@@ -56,35 +67,27 @@ def lambda_handler(event, context):
                 "messages": [{"role": "user", "content": [{"text": prompt}]}]
             })
         )
-        
-        result = json.loads(bedrock_res['body'].read())
-        analysis_raw = result['output']['message']['content'][0]['text']
-        
+        result_body = json.loads(bedrock_res['body'].read())
+        analysis_raw = result_body['output']['message']['content'][0]['text']
         match = re.search(r'\{.*\}', analysis_raw, re.DOTALL)
-        analysis = match.group(0) if match else analysis_raw
+        analysis_json_str = match.group(0) if match else analysis_raw
 
+        safe_key_name = key.replace('/', '-')
         s3.put_object(
-            Bucket=os.environ['RESULTS_BUCKET'],
-            Key=f"analysis-{key}.json",
-            Body=analysis
+            Bucket=os.environ['REPORTS_BUCKET'],
+            Key=f"analysis-{safe_key_name}.json",
+            Body=analysis_json_str,
+            ContentType='application/json'
         )
-        
-        threat_data = json.loads(analysis)
+        threat_data = json.loads(analysis_json_str)
         if threat_data.get('threat_level', '').lower() == 'high':
             sns.publish(
                 TopicArn=os.environ['TOPIC_ARN_2'],
-                Message=f"SENTINEL ALERT: {threat_data.get('summary')}",
+                Message=f"CRITICAL SENTINEL ALERT:\n\nKey: {key}\nSummary: {threat_data.get('summary')}",
                 Subject="High Priority Threat Detected"
             )
 
-        return {
-    "statusCode": 200,
-    "headers": {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-    },
-    "body": analysis 
-}
+        return {"statusCode": 200, "body": "Analysis Complete"}
 
     except Exception as e:
         print(f"Processing Error: {e}")

@@ -211,3 +211,103 @@ resource "aws_lambda_permission" "allow_cloudwatch_s3" {
     principal = "events.amazonaws.com"
     source_arn = aws_cloudwatch_event_rule.daily_scan.arn
 }
+
+data "archive_file" "sentinel_lambda_zip" {
+  type        = "zip"
+  source_file = "${path.module}/python/SENTINEL_SCRIPT.py"
+  output_path = "${path.module}/python/SENTINEL_SCRIPT.zip"
+}
+
+resource "aws_lambda_function" "sentinel_lambda" {
+    filename = data.archive_file.sentinel_lambda_zip.output_path
+    function_name = "Sentinel"
+    role = aws_iam_role.Sentinel_Lambda_Role.arn
+    timeout = 30
+    handler = "SENTINEL_SCRIPT.lambda_handler"
+    runtime = "python3.12"
+
+    environment {
+      variables = {
+        APP_REGION = var.region
+        TOPIC_ARN_2 = var.topicarn3
+        INPUT_BUCKET = var.results_bucket_name 
+        REPORTS_BUCKET = var.reports_bucket_name 
+      }
+    }
+}
+
+resource "aws_iam_policy" "Sentinel_Lambda_Policy" {
+    name = "${var.sentinel_lambda}-policy"
+    policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action   = ["sns:Publish"]
+        Effect   = "Allow"
+        Resource = [var.topicarn3] 
+      },
+      {
+        Action   = ["s3:ListAllMyBuckets"]
+        Effect   = "Allow"
+        Resource = "*" 
+      },
+      {
+        Action   = ["s3:ListBucket"]
+        Effect   = "Allow"
+        Resource = [var.results_bucket_arn] 
+      },
+      {
+        Action   = ["s3:GetObject"]
+        Effect   = "Allow"
+        Resource = ["${var.results_bucket_arn}/*"] 
+      },
+      {
+        Action = ["s3:PutObject"]
+        Effect = "Allow"
+        Resource = ["${var.reports_bucket_arn}/*"]
+      },
+      {
+        Action   = ["bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream"
+        ]
+        Effect   = "Allow"
+        Resource = "*" 
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "Sentinel_Lambda_Policy_Attachment" {
+    role       = aws_iam_role.Sentinel_Lambda_Role.name
+    policy_arn = aws_iam_policy.Sentinel_Lambda_Policy.arn
+}
+
+
+resource "aws_iam_role" "Sentinel_Lambda_Role" {
+    name = "${var.sentinel_lambda}-role"
+    assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = { Service = "lambda.amazonaws.com"}
+    }]
+    })
+}
+
+resource "aws_lambda_permission" "allow_s3_to_call_sentinel" {
+  statement_id  = "AllowS3InvokeSentinel"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.sentinel_lambda.function_name
+  principal     = "s3.amazonaws.com"
+  source_arn    = var.results_bucket_arn
+}
+
+resource "aws_s3_bucket_notification" "sentinel_s3_trigger" {
+  bucket = var.results_bucket_name 
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.sentinel_lambda.arn
+    events = ["s3:ObjectCreated:*"]
+    filter_prefix = "AWSLogs/"
+  }
+  depends_on = [aws_lambda_permission.allow_s3_to_call_sentinel]
+}

@@ -6,10 +6,12 @@ variable "region" {
     type = string
 }
 
-variable "vpc_cidr" {
+variable "results_bucket_name" {
     type = string
 }
+
 
 variable "results_bucket_arn" {
     type = string
 }
+

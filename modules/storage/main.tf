@@ -7,6 +7,13 @@ resource "aws_s3_bucket_website_configuration" "frontend_config" {
     index_document { suffix = "index.html" } 
     }
 
+resource "aws_s3_bucket_ownership_controls" "frontend_oc" {
+  bucket = aws_s3_bucket.frontend.id
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
 resource "aws_s3_bucket" "logs" {
     bucket = "${var.project_name}-logs-2026"
 }
@@ -36,6 +43,14 @@ resource "aws_iam_role_policy" "s3_access" {
         aws_s3_bucket.logs.arn,
         "${aws_s3_bucket.logs.arn}/*"
       ]
+    },
+    {
+      Action = ["s3:PutObject"]
+      Effect = "Allow"
+      Resource = [
+        aws_s3_bucket.reports.arn,
+        "${aws_s3_bucket.reports.arn}/*"
+      ]
     }]
   })
 }
@@ -43,4 +58,69 @@ resource "aws_iam_role_policy" "s3_access" {
 resource "aws_iam_instance_profile" "sentinel_profile" {
     name = "${var.project_name}-profile"
     role = aws_iam_role.sentinel-role.name
+}
+
+resource "aws_s3_bucket" "reports" {
+    bucket = "${var.project_name}-reports-2026"
+}
+
+resource "aws_s3_bucket_public_access_block" "logs_access" {
+  bucket = aws_s3_bucket.logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_public_access_block" "reports_access" {
+  bucket = aws_s3_bucket.reports.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_policy" "allow_cloudtrail_logging" {
+  bucket = aws_s3_bucket.logs.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSCloudTrailAclCheck"
+        Effect = "Allow"
+        Principal = { Service = "cloudtrail.amazonaws.com" }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.logs.arn
+      },
+      {
+        Sid    = "AWSCloudTrailWrite"
+        Effect = "Allow"
+        Principal = { Service = "cloudtrail.amazonaws.com" }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.logs.arn}/AWSLogs/*"
+        Condition = {
+          StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
+        }
+      },
+      {
+        Sid    = "AWSLogDeliveryWrite"
+        Effect = "Allow"
+        Principal = { Service = "delivery.logs.amazonaws.com" }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.logs.arn}/AWSLogs/*"
+        Condition = {
+          StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
+        }
+      },
+      {
+        Sid    = "AWSLogDeliveryCheck"
+        Effect = "Allow"
+        Principal = { Service = "delivery.logs.amazonaws.com" }
+        Action   = ["s3:GetBucketAcl", "s3:ListBucket"]
+        Resource = aws_s3_bucket.logs.arn
+      }
+    ]
+  })
 }

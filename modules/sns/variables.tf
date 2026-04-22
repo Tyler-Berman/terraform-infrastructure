@@ -13,3 +13,7 @@ variable "updates_email" {
 variable "s3_lambda" {
     type = string
 }
+
+variable "sentinel_lambda" {
+    type = string
+}

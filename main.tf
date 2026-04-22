@@ -4,6 +4,7 @@ module "networking" {
     project_name = var.project_name
     region = var.region
     vpc_cidr = var.vpc_cidr
+    results_bucket_arn = module.storage.results_bucket_arn
 }
 
 module "security" {
@@ -25,6 +26,12 @@ module "compute" {
     topicarn2 = module.sns.topicarn2
     topicarn = module.sns.topicarn
     s3_lambda = var.s3_lambda
+    sentinel_lambda = var.sentinel_lambda
+    topicarn3 = module.sns.topicarn3
+    results_bucket_name = module.storage.results_bucket_name
+    reports_bucket_name = module.storage.reports_bucket_name
+    results_bucket_arn = module.storage.results_bucket_arn
+    reports_bucket_arn = module.storage.reports_bucket_arn
 }
 
 module "storage" {
@@ -37,4 +44,14 @@ module "sns" {
     region = var.region
     updates_email = var.updates_email
     s3_lambda = var.s3_lambda
+    sentinel_lambda = var.sentinel_lambda
+}
+
+module "logs" {
+    source = "./modules/logs"
+    project_name = var.project_name
+    region = var.region
+    results_bucket_arn = module.storage.results_bucket_arn
+    results_bucket_name = module.storage.results_bucket_name
+    depends_on = [ module.storage ]
 }

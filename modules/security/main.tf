@@ -22,3 +22,4 @@ resource "aws_security_group" "sentinel_sg" {
         name = "${var.project_name}-sg"
     }
 }
+

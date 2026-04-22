@@ -5,3 +5,7 @@ output "topicarn2"{
 output "topicarn" {
     value = aws_sns_topic.S3_Topic.arn
 }
+
+output "topicarn3" {
+    value = aws_sns_topic.Sentinel_Topic.arn
+}

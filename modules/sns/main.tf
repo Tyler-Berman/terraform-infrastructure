@@ -18,3 +18,14 @@ resource "aws_sns_topic_subscription" "user_updates_s3" {
     protocol = "email"
     endpoint = var.updates_email
 }
+
+
+resource "aws_sns_topic" "Sentinel_Topic" {
+    name = "${var.sentinel_lambda}-topic" 
+}
+
+resource "aws_sns_topic_subscription" "user_updates_sentinel" {
+    topic_arn = aws_sns_topic.Sentinel_Topic.arn
+    protocol = "email"
+    endpoint = var.updates_email
+}
