@@ -44,12 +44,12 @@ resource "aws_route_table_association" "public_assoc" {
 }
 
 
-resource "aws_flow_log" "sentinel_flow_logs" {
-  log_destination_type = "s3"
-  log_destination = var.results_bucket_arn
-  traffic_type    = "ALL"
-  vpc_id          = aws_vpc.main.id
-}
+#resource "aws_flow_log" "sentinel_flow_logs" {
+ # log_destination_type = "s3"
+ # log_destination = var.results_bucket_arn
+ # traffic_type    = "ALL"
+  #vpc_id          = aws_vpc.main.id
+#}
 
 data "aws_iam_policy_document" "assume_role" {
   statement {

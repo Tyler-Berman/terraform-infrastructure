@@ -55,3 +55,10 @@ module "logs" {
     results_bucket_name = module.storage.results_bucket_name
     depends_on = [ module.storage ]
 }
+
+module "api" {
+    source = "./modules/api"
+    project_name = var.project_name
+    lambda_invoke_arn = module.compute.sentinel_lambda_invoke_arn
+    lambda_name = module.compute.sentinel_lambda_name
+}

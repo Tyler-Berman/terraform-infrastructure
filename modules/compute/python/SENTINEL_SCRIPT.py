@@ -11,18 +11,28 @@ def lambda_handler(event, context):
     bedrock = boto3.client('bedrock-runtime', region_name=aws_region)
     sns = boto3.client('sns', region_name=aws_region)
 
-    if 'requestContext' in event and 'http' in event['requestContext']:
+    if 'httpMethod' in event or 'requestContext' in event:
         try:
             print("DEBUG - Website request detected. Fetching latest analysis...")
             results_bucket = os.environ['REPORTS_BUCKET']
             objs = s3.list_objects_v2(Bucket=results_bucket, Prefix='analysis-')
+        
             if 'Contents' not in objs:
-                raise Exception("No analysis files found")
+                return {
+                    "statusCode": 200,
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "GET,OPTIONS",
+                        "Access-Control-Allow-Headers": "Content-Type"
+                    },
+                    "body": json.dumps({"threat_level": "N/A", "summary": "Sentinel is active. No logs analyzed yet."})
+                }
+        
             latest_key = sorted(objs['Contents'], key=lambda x: x['LastModified'], reverse=True)[0]['Key']
-            
             response = s3.get_object(Bucket=results_bucket, Key=latest_key)
             latest_analysis = response['Body'].read().decode('utf-8')
-            
+        
             return {
                 "statusCode": 200,
                 "headers": {
@@ -36,22 +46,25 @@ def lambda_handler(event, context):
         except Exception as e:
             print(f"Fetch Error: {e}")
             return {
-                "statusCode": 404,
+                "statusCode": 500,
                 "headers": {"Access-Control-Allow-Origin": "*"},
-                "body": json.dumps({"threat_level": "N/A", "summary": f"Error or no files: {str(e)}"})
+                "body": json.dumps({"threat_level": "Error", "summary": str(e)})
             }
+
     try:
         bucket = event['Records'][0]['s3']['bucket']['name']
         key = event['Records'][0]['s3']['object']['key']
         print(f"DEBUG - S3 Trigger detected for file: {key}")
+    
         response = s3.get_object(Bucket=bucket, Key=key)
         raw_content = response['Body'].read()
-        
+    
         if key.endswith('.gz'):
             with gzip.GzipFile(fileobj=io.BytesIO(raw_content)) as gz:
                 file_content = gz.read().decode('utf-8')
         else:
             file_content = raw_content.decode('utf-8')
+
         safe_logs = file_content[-10000:]
         prompt = (
             "You are an expert AWS Security Analyst. Analyze the following logs (CloudTrail or VPC Flow Logs). "
@@ -60,6 +73,7 @@ def lambda_handler(event, context):
             "Do not include conversational text. "
             f"\n\nLogs:\n{safe_logs}"
         )
+
         bedrock_res = bedrock.invoke_model(
             modelId="amazon.nova-micro-v1:0",
             body=json.dumps({
@@ -67,6 +81,7 @@ def lambda_handler(event, context):
                 "messages": [{"role": "user", "content": [{"text": prompt}]}]
             })
         )
+
         result_body = json.loads(bedrock_res['body'].read())
         analysis_raw = result_body['output']['message']['content'][0]['text']
         match = re.search(r'\{.*\}', analysis_raw, re.DOTALL)
@@ -79,6 +94,7 @@ def lambda_handler(event, context):
             Body=analysis_json_str,
             ContentType='application/json'
         )
+
         threat_data = json.loads(analysis_json_str)
         if threat_data.get('threat_level', '').lower() == 'high':
             sns.publish(

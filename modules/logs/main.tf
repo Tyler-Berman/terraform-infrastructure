@@ -3,8 +3,9 @@ resource "aws_cloudtrail" "sentinel_cloudtrail" {
     name = "${var.project_name}-CT-Logs"
     s3_bucket_name = var.results_bucket_name
     include_global_service_events = true
-    enable_logging = true
+    enable_logging = false
     is_multi_region_trail = true
+    
 }
 
 resource "aws_iam_role" "sentinel-role-ct" {

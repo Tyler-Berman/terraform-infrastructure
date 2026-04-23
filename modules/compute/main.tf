@@ -247,19 +247,16 @@ resource "aws_iam_policy" "Sentinel_Lambda_Policy" {
         Resource = [var.topicarn3] 
       },
       {
-        Action   = ["s3:ListAllMyBuckets"]
-        Effect   = "Allow"
-        Resource = "*" 
-      },
-      {
         Action   = ["s3:ListBucket"]
         Effect   = "Allow"
-        Resource = [var.results_bucket_arn] 
+        Resource = [var.results_bucket_arn,
+        var.reports_bucket_arn]
       },
       {
-        Action   = ["s3:GetObject"]
+        Action   = ["s3:GetObject", "s3:PutObject"]
         Effect   = "Allow"
-        Resource = ["${var.results_bucket_arn}/*"] 
+        Resource = ["${var.results_bucket_arn}/*",
+          "${var.reports_bucket_arn}/*"]
       },
       {
         Action = ["s3:PutObject"]
@@ -310,4 +307,9 @@ resource "aws_s3_bucket_notification" "sentinel_s3_trigger" {
     filter_prefix = "AWSLogs/"
   }
   depends_on = [aws_lambda_permission.allow_s3_to_call_sentinel]
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_logs" {
+  role       = aws_iam_role.Sentinel_Lambda_Role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
