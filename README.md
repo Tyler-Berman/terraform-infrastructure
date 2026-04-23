@@ -3,7 +3,8 @@ report on events in AWS. It takes logs from CloudTrail and VPC Flow Logs, and su
 These results are then displayed in a security dashboard hosted on a static S3 bucket. 
 
 Live Dashboard: http://sentinel-v2-frontend-2026.s3-website-us-east-1.amazonaws.com/
-Architecture Diagram: 
+
+Architecture Diagram: ![terraform-infrastructure](blank diaggram.png)
 
 Infrastructure as Code: Fully automated deployment using Terraform Modules.
 
